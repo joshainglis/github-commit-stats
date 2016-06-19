@@ -25,13 +25,15 @@ def hms(s):
     h, m = divmod(m, 60)
     return h, m, s
 
+def time_to_reset(response):
+    return int(float(response.headers.get('x-rateLimit-reset')) - time.time())
 
 def get_all(s, url, agg, status_code=200, insert_procedure=None, db_session=None):
     r = s.get(url)
+    if int(r.headers.get('x-ratelimit-remaining')) < 5:
+        time.sleep(time_to_reset(r) + 60)
     logger.debug('{:<6}{:<10}{}'.format(
-        r.headers.get('x-ratelimit-remaining'),
-        '{}:{}:{}'.format(*hms(int(float(r.headers.get('x-rateLimit-reset')) - time.time()))),
-        url
+        r.headers.get('x-ratelimit-remaining'), '{}:{}:{}'.format(*hms(time_to_reset(r))), url
     ))
     if r.status_code == 202:
         return agg, 202
@@ -211,8 +213,8 @@ def _get_user_info_from_commit(db_session: SQLASession, gh_commit: dict, kind: s
             db_session.add(email_row)
     if gh_user is not None:
         user_row = get_or_add_user(db_session, gh_session, gh_user)
-        if email_row is not None and user_row not in email_row.user:
-            email_row.user.append(user_row)
+        if email_row is not None and email_row.user_id is None:
+            email_row.user = user_row
     else:
         user_row = get_user_from_email(db_session, email)
     return user_row, email_row

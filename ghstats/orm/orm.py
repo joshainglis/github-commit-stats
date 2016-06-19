@@ -48,6 +48,10 @@ class Email(GHDBase):
     email = Column(String, nullable=False, unique=True)
     user_id = Column(UUID(as_uuid=True), ForeignKey('users.id'))
     user = relationship("User", back_populates="emails")
+    committed = relationship("Commit", back_populates='committer_email',
+                             primaryjoin='Email.id == Commit.committer_email_id')
+    authored = relationship("Commit", back_populates='author_email',
+                            primaryjoin='Email.id == Commit.author_email_id')
 
     def __init__(self, email, user=None):
         self.email = email
@@ -62,7 +66,7 @@ class User(Named, ExtID, GHDBase):
     teams = relationship("Team", secondary=team_user_table, back_populates="users")
     emails = relationship("Email", back_populates='user')
     committed = relationship("Commit", back_populates='committer', primaryjoin="User.id == Commit.committer_id")
-    authored = relationship("Commit", back_populates='child_idauthor', primaryjoin="User.id == Commit.author_id")
+    authored = relationship("Commit", back_populates='author', primaryjoin="User.id == Commit.author_id")
 
     def __init__(self, ext_id, name, orgs=None, teams=None, emails=None, committed=None, authored=None):
         super().__init__(name=name)
@@ -160,17 +164,10 @@ class Commit(Named, GHDBase):
     files = relationship('File', back_populates='commit')
     parents = relationship(
         "Commit",
-        secondary=commit_parent_table,
-        primaryjoin=commit_parent_table.c.child_id,
-        secondaryjoin=commit_parent_table.c.parent_id,
-        back_populates="children"
-    )
-    children = relationship(
-        "Commit",
-        secondary=commit_parent_table,
-        primaryjoin=commit_parent_table.c.parent_id,
-        secondaryjoin=commit_parent_table.c.child_id,
-        back_populates="parents"
+        secondary="commit_parent",
+        primaryjoin="Commit.id == commit_parent.c.child_id",
+        secondaryjoin="Commit.id == commit_parent.c.parent_id",
+        backref="children"
     )
     refs = relationship('Ref', back_populates='head')
 
