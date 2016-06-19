@@ -1,33 +1,9 @@
-from sqlalchemy import Column, func, String, MetaData, Table, ForeignKey, DateTime, text
-from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy import Column, func, String, Table, ForeignKey, DateTime, text, Integer
+from sqlalchemy.dialects.postgresql import UUID, BYTEA
 from sqlalchemy.orm import relationship
 
-from josha.config import config
-
-meta = MetaData(naming_convention={
-    "ix": 'ix_%(column_0_label)s',
-    "uq": "uq_%(table_name)s_%(column_0_name)s",
-    "ck": "ck_%(table_name)s_%(constraint_name)s",
-    "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
-    "pk": "pk_%(table_name)s"
-})
-
-GHDBase = declarative_base(metadata=meta)
-
-pg_functions = []
-pg_triggers = []
-
-BASE_GH_URL = config.get('GITHUB', 'github_api_url')
-
-
-def dcim_base_str(self):
-    if hasattr(self, 'id'):
-        return '{}::{}'.format(self.__class__.__name__, str(self.id))
-    return super(GHDBase, self).__str__()
-
-
-GHDBase.__str__ = dcim_base_str
+from ghstats.config import BASE_GH_URL
+from ghstats.orm import GHDBase
 
 organisation_user_table = Table(
     'organisation_user', GHDBase.metadata,
@@ -44,7 +20,6 @@ team_user_table = Table(
 
 class Named(object):
     __tablename__ = ''
-
     id = Column(UUID(as_uuid=True), primary_key=True, server_default=func.uuid_generate_v4())
     name = Column(String, nullable=False)
     added_at = Column(DateTime(timezone=False), server_default=text("timezone('utc', now())"))
@@ -53,13 +28,19 @@ class Named(object):
     def url(self):
         return '{}/{}/{}'.format(BASE_GH_URL, self.__tablename__, self.name)
 
-    def __init__(self, name):
+    def __init__(self, name, *args, **kwargs):
         self.name = name
+
+
+class ExtID(object):
+    ext_id = Column(Integer, nullable=False, unique=True)
+
+    def __init__(self, ext_id, *args, **kwargs):
+        self.ext_id = ext_id
 
 
 class Email(GHDBase):
     __tablename__ = 'emails'
-
     id = Column(UUID(as_uuid=True), primary_key=True, server_default=func.uuid_generate_v4())
     email = Column(String, nullable=False, unique=True)
     user_id = Column(UUID(as_uuid=True), ForeignKey('users.id'))
@@ -70,7 +51,7 @@ class Email(GHDBase):
         self.user = user
 
 
-class User(Named, GHDBase):
+class User(Named, ExtID, GHDBase):
     __tablename__ = 'users'
 
     orgs = relationship("Organisation", secondary=organisation_user_table, back_populates="users")
@@ -79,8 +60,8 @@ class User(Named, GHDBase):
     committed = relationship("Commit", back_populates='committer', primaryjoin="User.id == Commit.committer_id")
     authored = relationship("Commit", back_populates='author', primaryjoin="User.id == Commit.author_id")
 
-    def __init__(self, name, orgs=None, teams=None, emails=None, committed=None, authored=None):
-        super().__init__(name)
+    def __init__(self, ext_id, name, orgs=None, teams=None, emails=None, committed=None, authored=None):
+        super().__init__(name=name, ext_id=ext_id)
         self.orgs = orgs
         self.teams = teams
         self.emails = emails
@@ -88,42 +69,43 @@ class User(Named, GHDBase):
         self.authored = authored
 
 
-class Team(Named, GHDBase):
+class Team(Named, ExtID, GHDBase):
     __tablename__ = 'teams'
 
     org_id = Column(UUID(as_uuid=True), ForeignKey('orgs.id'))
     org = relationship("Organisation", back_populates="teams")
     users = relationship("User", secondary=team_user_table, back_populates="orgs")
+    ext_id = Column(Integer, nullable=False, unique=True)
 
-    def __init__(self, name, org, users=None):
-        super().__init__(name)
+    def __init__(self, ext_id, name, org, users=None):
+        super().__init__(name=name, ext_id=ext_id)
         self.org = org
         self.users = users
 
 
-class Organisation(Named, GHDBase):
+class Organisation(Named, ExtID, GHDBase):
     __tablename__ = 'orgs'
 
     users = relationship("User", secondary=organisation_user_table, back_populates="orgs")
     repos = relationship("Repo", back_populates="org")
     teams = relationship("Team", back_populates="org")
 
-    def __init__(self, name, users=None, repos=None, teams=None):
-        super().__init__(name)
+    def __init__(self, ext_id, name, users=None, repos=None, teams=None):
+        super().__init__(name=name, ext_id=ext_id)
         self.users = users
         self.repos = repos
         self.teams = teams
 
 
-class Repo(Named, GHDBase):
+class Repo(Named, ExtID, GHDBase):
     __tablename__ = 'repos'
 
     org_id = Column(UUID(as_uuid=True), ForeignKey('orgs.id'))
     org = relationship("Organisation", back_populates="repos")
     commits = relationship("Commit")
 
-    def __init__(self, name, org, commits=None):
-        super().__init__(name)
+    def __init__(self, ext_id, name, org, commits=None):
+        super().__init__(name=name, ext_id=ext_id)
         self.org = org
         self.commits = commits
 
@@ -141,6 +123,7 @@ class Commit(Named, GHDBase):
     author = relationship("User", back_populates="authored", foreign_keys=[author_id])
     repo_id = Column(UUID(as_uuid=True), ForeignKey('repos.id'))
     repo = relationship("Repo", back_populates="commits")
+    sha = Column(BYTEA(length=40), nullable=False, unique=True)
 
     def __init__(self, name, committer, author, repo):
         super().__init__(name)

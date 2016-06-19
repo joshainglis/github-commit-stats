@@ -1,10 +1,11 @@
 from __future__ import with_statement
 
-import os
+from logging.config import fileConfig
+
+from sqlalchemy import engine_from_config, pool
 
 from alembic import context
-from sqlalchemy import engine_from_config, pool
-from logging.config import fileConfig
+from ghstats.config import DB_CONNECTION_STRING
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -16,9 +17,8 @@ fileConfig(config.config_file_name)
 
 # add your model's MetaData object here
 # for 'autogenerate' support
-# from myapp import mymodel
-# target_metadata = mymodel.Base.metadata
-target_metadata = None
+from ghstats.orm.orm import GHDBase
+target_metadata = GHDBase.metadata
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:
@@ -38,11 +38,8 @@ def run_migrations_offline():
     script output.
 
     """
-    url = config.get_main_option("sqlalchemy.url")
-    un = os.getenv('GH_PG_UN')
-    pw = os.getenv('GH_PG_PW')
     context.configure(
-        url=url.format(un, pw), target_metadata=target_metadata, literal_binds=True)
+        url=DB_CONNECTION_STRING, target_metadata=target_metadata, literal_binds=True)
 
     with context.begin_transaction():
         context.run_migrations()

@@ -5,6 +5,7 @@ import os
 config = configparser.ConfigParser()
 config.read(os.getenv('GH_DATA_CONFIG', 'config.ini'))
 
+BASE_GH_URL = config.get('GITHUB', 'api_url', fallback='https://api.github.com')
 GITHUB_USERNAME = os.getenv('GITHUB_LOGIN', config.get('GITHUB', 'login'))
 GITHUB_OAUTH_TOKEN = os.getenv('GITHUB_TOKEN', config.get('GITHUB', 'token'))
 ORGINISATIONS = json.loads(config.get('DETAILS', 'orgs'))
@@ -23,3 +24,4 @@ DB_CONNECTION_STRING = "postgresql+psycopg2://{un}:{pw}@{host}:{port}/{db}".form
     port=DB_PORT,
     db=DB_NAME
 )
+

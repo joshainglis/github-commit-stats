@@ -4,15 +4,16 @@ import time
 from collections import defaultdict
 
 import pandas as pd
-import requests
 
-from josha.config import GITHUB_USERNAME, GITHUB_OAUTH_TOKEN, ORGINISATIONS
-from josha.orm.orm import Repo
+from ghstats.config import ORGINISATIONS
+from ghstats.orm.orm import Repo
+from ghstats.session import db_session_manager, gh_session_manager
 
 logger = logging.getLogger(__name__)
 
 LINK_RE = re.compile(r'<(?P<link>.+)>; rel="next"')
 PROJECT_RE = re.compile(r'https://api.github.com/repos/(?:{})/(.+?)/'.format('|'.join(ORGINISATIONS)))
+
 
 def hms(s):
     m, s = divmod(s, 60)
@@ -66,14 +67,6 @@ def fetch(s, urls, insert_procedure=None):
     return d
 
 
-def get_session():
-    s = requests.Session()
-    s.auth = (GITHUB_USERNAME, GITHUB_OAUTH_TOKEN)
-    s.headers.update({'Accept': 'application/vnd.github.v3+json'})
-    s.headers.update({'User-Agent': GITHUB_USERNAME})
-    return s
-
-
 def get_languages_dict(langs):
     languages = defaultdict(list)
     for project, lang_list in langs.items():
@@ -86,16 +79,25 @@ def get_languages_dict(langs):
     return languages
 
 
-def insert_repo(repo):
+def get_all_repos(orgs, gh_session, db_session):
+    agg = []
+    for org in orgs:
+        url = "https://api.github.com/orgs/{}/repos".format(org)
+        agg, status_code = get_all(gh_session, url, agg, insert_procedure=insert_repo)
+
+
+def insert_repo(db_session, repo):
+    db_session.query(Repo, )
     Repo(repo['name'])
 
+
 if __name__ == '__main__':
-    with get_session() as s:
-        iixlabs_repos, status_code = get_all(s, "https://api.github.com/orgs/iixlabs/repos", [])
-        iixlabs_repos, status_code = get_all(s, "https://api.github.com/orgs/cloudrouter/repos", iixlabs_repos)
-        # stats = fetch(s, get_queue(iixlabs_repos, 'url', '/stats/contributors'))
-        commits = fetch(s, get_queue(iixlabs_repos, 'url', '/commits'))
-        icommits = fetch(s, [y['url'] for x in commits.values() for y in x])
-        langs = fetch(s, get_queue(iixlabs_repos, 'url', '/languages'))
+    with db_session_manager as db_session, gh_session_manager as gh_session:
+        iixlabs_repos, status_code = get_all(gh_session, "https://api.github.com/orgs/iixlabs/repos", [])
+        iixlabs_repos, status_code = get_all(gh_session, "https://api.github.com/orgs/cloudrouter/repos", iixlabs_repos)
+        # stats = fetch(gh_session, get_queue(iixlabs_repos, 'url', '/stats/contributors'))
+        commits = fetch(gh_session, get_queue(iixlabs_repos, 'url', '/commits'))
+        icommits = fetch(gh_session, [y['url'] for x in commits.values() for y in x])
+        langs = fetch(gh_session, get_queue(iixlabs_repos, 'url', '/languages'))
 
     df_lang = pd.DataFrame(get_languages_dict(langs))
