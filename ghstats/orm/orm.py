@@ -49,9 +49,10 @@ class Email(GHDBase):
     user_id = Column(UUID(as_uuid=True), ForeignKey('users.id'))
     user = relationship("User", back_populates="emails")
 
-    def __init__(self, email, user):
+    def __init__(self, email, user=None):
         self.email = email
-        self.user = user
+        if user is not None:
+            self.user = user
 
 
 class User(Named, ExtID, GHDBase):
@@ -143,9 +144,13 @@ class Commit(Named, GHDBase):
 
     committer_id = Column(UUID(as_uuid=True), ForeignKey('users.id'))
     committer = relationship("User", back_populates="committed", foreign_keys=[committer_id])
+    committer_email_id = Column(UUID(as_uuid=True), ForeignKey('emails.id'))
+    committer_email = relationship("Email", back_populates="committed", foreign_keys=[committer_email_id])
     committed_at = Column(DateTime(timezone=False))
     author_id = Column(UUID(as_uuid=True), ForeignKey('users.id'))
     author = relationship("User", back_populates="authored", foreign_keys=[author_id])
+    author_email_id = Column(UUID(as_uuid=True), ForeignKey('emails.id'))
+    author_email = relationship("Email", back_populates="authored", foreign_keys=[author_email_id])
     authored_at = Column(DateTime(timezone=False))
     repo_id = Column(UUID(as_uuid=True), ForeignKey('repos.id'))
     repo = relationship("Repo", back_populates="commits")
@@ -169,16 +174,25 @@ class Commit(Named, GHDBase):
     )
     refs = relationship('Ref', back_populates='head')
 
-    def __init__(self, sha, name, committer, author, repo, committed_at, authored_at, additions, deletions):
+    def __init__(self, sha, name, repo, additions, deletions, committer=None, committer_email=None, committed_at=None,
+                 author=None, author_email=None, authored_at=None):
         super().__init__(name)
-        self.committer = committer
-        self.author = author
         self.repo = repo
         self.sha = sha
-        self.committed_at = committed_at
-        self.authored_at = authored_at
         self.additions = additions
         self.deletions = deletions
+        if committer is not None:
+            self.committer = committer
+        if committer_email is not None:
+            self.committer_email = committer_email
+        if committed_at is not None:
+            self.committed_at = committed_at
+        if author is not None:
+            self.author = author
+        if author_email is not None:
+            self.author_email = author_email
+        if authored_at is not None:
+            self.authored_at = authored_at
 
 
 class File(GHDBase):

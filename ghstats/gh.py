@@ -3,7 +3,7 @@ import re
 import time
 from collections import defaultdict
 from datetime import datetime
-from typing import Iterable, List, Union
+from typing import Iterable, List, Tuple, Optional
 
 from requests.sessions import Session as GHSession
 from sqlalchemy.orm.session import Session as SQLASession
@@ -184,27 +184,43 @@ def get_users(db_session: SQLASession, gh_session: GHSession, orgs: Iterable[Org
             user_rows.append(get_or_add_user(db_session, gh_session, user, org=org))
     return user_rows
 
-def get_user_from_email(db_session: SQLASession, email: str) -> Union[User, None]:
-    email = db_session.query(Email).filter(Email.email == email).scalar()  # type: Email
-    if email is not None:
-        return email.user
+
+def get_user_from_email(db_session: SQLASession, email: str) -> Optional[User]:
+    if email is None:
+        return None
+    email_row = db_session.query(Email).filter(Email.email == email).scalar()  # type: Email
+    if email_row is not None:
+        return email_row.user
     return None
+
 
 def parse_gh_date(date):
     return datetime.strptime(date, '%Y-%m-%dT%H:%M:%SZ')
 
-def _get_user_info_from_commit(db_session, gh_commit, kind):
-    if gh_commit[kind] is not None:
-        committer = get_or_add_user(db_session, gh_session, gh_commit[kind])
-        email = gh_commit['commit'][kind]['email']
-        if email and email not in committer.emails:
-            db_session.add(Email(email, committer))
+
+def _get_user_info_from_commit(db_session: SQLASession, gh_commit: dict, kind: str) -> \
+        Tuple[Optional[User], Optional[Email]]:
+    email = gh_commit['commit'][kind]['email']
+    gh_user = gh_commit[kind]
+    email_row = None
+    user_row = None
+    if email:
+        email_row = db_session.query(Email).filter(Email.email == email).scalar()
+        if email_row is None:
+            email_row = Email(email)
+            db_session.add(email_row)
+    if gh_user is not None:
+        user_row = get_or_add_user(db_session, gh_session, gh_user)
+        if email_row is not None and user_row not in email_row.user:
+            email_row.user.append(user_row)
     else:
-        committer = get_user_from_email(db_session, gh_commit['commit'][kind]['email'])
+        user_row = get_user_from_email(db_session, email)
+    return user_row, email_row
 
 
 def get_author(db_session, gh_commit):
     return _get_user_info_from_commit(db_session, gh_commit, 'author')
+
 
 def get_committer(db_session, gh_commit):
     return _get_user_info_from_commit(db_session, gh_commit, 'committer')
@@ -218,30 +234,20 @@ def get_commits(db_session: SQLASession, gh_session: GHSession, repos: Iterable[
         new = (sha for sha in (c['sha'].encode() for c in commits) if sha not in existing_commits)
         for commit_sha in new:
             (commit,), _ = get_all(gh_session, '{}/commits/{}'.format(repo.url, commit_sha.decode()), [])
-            if commit['committer'] is not None:
-                committer = get_or_add_user(db_session, gh_session, commit['committer'])
-                email = commit['commit']['committer']['email']
-                if email and email not in committer.emails:
-                    db_session.add(Email(email, committer))
-            else:
-                committer = get_user_from_email(db_session, commit['commit']['committer']['email'])
-            if commit['author'] is not None:
-                author = get_or_add_user(db_session, gh_session, commit['author'])
-                email = commit['commit']['author']['email']
-                if email and email not in author.emails:
-                    db_session.add(Email(email, author))
-
-            author = get_or_add_user(db_session, gh_session, commit['author'])
+            committer, committer_email = get_committer(db_session, commit)
+            author, author_email = get_author(db_session, commit)
             new_commit = Commit(
-                sha=commit_sha,
                 name=commit['commit']['message'],
-                committer=committer,
-                author=author,
+                sha=commit_sha,
                 repo=repo,
-                committed_at=parse_gh_date(commit['commit']['committer']['date']),
-                authored_at=parse_gh_date(commit['commit']['author']['date']),
                 additions=commit['stats']['additions'],
                 deletions=commit['stats']['deletions'],
+                committer=committer,
+                committer_email=committer_email,
+                committed_at=parse_gh_date(commit['commit']['committer']['date']),
+                author=author,
+                author_email=author_email,
+                authored_at=parse_gh_date(commit['commit']['author']['date']),
             )
             db_session.add(new_commit)
             for file in commit['files']:
