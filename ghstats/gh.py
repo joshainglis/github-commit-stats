@@ -233,7 +233,7 @@ def get_commits(db_session: SQLASession, gh_session: GHSession, repos: Iterable[
         get_commit_q = db_session.query(Commit.sha).filter(Commit.repo_id == repo.id)
         existing_commits = {commit.sha for commit in get_commit_q.all()}
         commits, _ = get_all(gh_session, '{}/commits'.format(repo.url), [])
-        new = (sha for sha in (c['sha'].encode() for c in commits) if sha not in existing_commits)
+        new = (sha for sha in (c['sha'].encode() for c in commits if 'sha' in c) if sha not in existing_commits)
         for commit_sha in new:
             (commit,), _ = get_all(gh_session, '{}/commits/{}'.format(repo.url, commit_sha.decode()), [])
             committer, committer_email = get_committer(db_session, commit)
