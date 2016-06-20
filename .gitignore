@@ -148,3 +148,5 @@ ENV/
 
 # Rope project settings
 .ropeproject
+
+config.ini
