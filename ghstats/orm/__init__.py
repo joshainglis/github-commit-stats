@@ -16,6 +16,7 @@ GHDBase = declarative_base(metadata=meta)
 pg_functions = []
 pg_triggers = []
 
+
 def dcim_base_str(self):
     if hasattr(self, 'id'):
         return '{}::{}'.format(self.__class__.__name__, str(self.id))
@@ -24,8 +25,8 @@ def dcim_base_str(self):
 
 GHDBase.__str__ = dcim_base_str
 
-
 if __name__ == '__main__':
     from sqlalchemy import create_engine
+
     engine = create_engine(DB_CONNECTION_STRING)
     GHDBase.metadata.create_all(engine)

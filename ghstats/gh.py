@@ -3,10 +3,9 @@ from typing import List, Tuple
 
 from ghstats.config import BASE_GH_URL
 from ghstats.orm.orm import Repo, Organisation, Team, User, Email, Commit, File
-from ghstats.utils import logger, get_all, parse_gh_date
+from ghstats.utils import get_all, parse_gh_date
 
-logging.basicConfig()
-logger.setLevel(logging.DEBUG)
+logger = logging.getLogger(__file__)
 
 
 def get_orgs(db_session, gh_session, orgs):
