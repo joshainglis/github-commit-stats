@@ -1,4 +1,4 @@
-from sqlalchemy import Column, func, String, Table, ForeignKey, DateTime, text, Integer, Index
+from sqlalchemy import Column, func, String, Table, ForeignKey, DateTime, text, Integer, Index, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID, BYTEA
 from sqlalchemy.orm import relationship
 
@@ -38,6 +38,10 @@ class Named(object):
         self.name = name
 
 
+class UniqueNamed(Named):
+    name = Column(String, nullable=False, unique=True)
+
+
 class ExtID(object):
     ext_id = Column(Integer, nullable=False, unique=True)
 
@@ -59,7 +63,7 @@ class Email(GHDBase):
             self.user = user
 
 
-class User(Named, ExtID, GHDBase):
+class User(UniqueNamed, ExtID, GHDBase):
     __tablename__ = 'users'
 
     orgs = relationship("Organisation", secondary=organisation_user_table, back_populates="users")
@@ -83,7 +87,7 @@ class User(Named, ExtID, GHDBase):
             self.authored = authored
 
 
-class Team(Named, ExtID, GHDBase):
+class Team(UniqueNamed, ExtID, GHDBase):
     __tablename__ = 'teams'
 
     org_id = Column(UUID(as_uuid=True), ForeignKey('orgs.id'))
@@ -99,7 +103,7 @@ class Team(Named, ExtID, GHDBase):
             self.users = users
 
 
-class Organisation(Named, ExtID, GHDBase):
+class Organisation(UniqueNamed, ExtID, GHDBase):
     __tablename__ = 'orgs'
 
     users = relationship("User", secondary=organisation_user_table, back_populates="orgs")
@@ -119,6 +123,10 @@ class Organisation(Named, ExtID, GHDBase):
 
 class Repo(Named, ExtID, GHDBase):
     __tablename__ = 'repos'
+    __table_args__ = (
+        UniqueConstraint('name', 'org_id', name='unique_repo_name_per_org'),
+    )
+
 
     org_id = Column(UUID(as_uuid=True), ForeignKey('orgs.id'))
     org = relationship("Organisation", back_populates="repos")

@@ -4,9 +4,16 @@
 CLI for acquiring github stats
 """
 
-from ghstats.config import ORGINISATIONS
+import logging
+
+from ghstats.config import ORGANISATIONS
 from ghstats.gh import get_orgs, get_users, get_teams, get_repos, get_commits
 from ghstats.session import db_session_manager, gh_session_manager
+
+logging.basicConfig(level=logging.DEBUG)
+requests_logger = logging.getLogger('requests')
+requests_logger.setLevel(logging.ERROR)
+
 
 if __name__ == '__main__':
     with db_session_manager as db_session, gh_session_manager as gh_session:
